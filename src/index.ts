@@ -1,14 +1,10 @@
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
-import axios, { AxiosError } from "axios";
-import fs from "fs";
-import path from "path";
-import * as https from "https";
-import FormData from "form-data";
 
 import { Admins, Orders, Start } from "./commands";
 import { DocHandler, QueryHandler } from "./handlers";
-import { Notification } from "./services";
+import { Notification, ImageUploader } from "./services";
+import { connect } from "./db";
 
 dotenv.config();
 
@@ -31,6 +27,41 @@ bot.onText(/^\/orders +(.+)/, async (msg, match) =>
   Orders.Orders(bot, msg, match)
 );
 
+interface PendingUpload {
+  images: Array<{
+    fileId: string;
+    url: string;
+  }>;
+  text?: string;
+}
+
+// Add this state management
+const pendingUploads = new Map<number, PendingUpload>();
+
+// Modify the addProducts command handler
+bot.onText(/\/addImage/, async (msg) => {
+  const chatId = msg.chat.id;
+  isAddActive = true;
+  pendingUploads.set(chatId, { images: [] });
+  await bot.sendMessage(
+    chatId,
+    "Пожалуйста, отправьте текст описания продукта."
+  );
+});
+
+bot.on("text", async (msg) => {
+  const chatId = msg.chat.id;
+  if (!isAddActive || !pendingUploads.has(chatId)) return;
+
+  const pending = pendingUploads.get(chatId)!;
+  if (!pending.text) {
+    pending.text = msg.text;
+    pendingUploads.set(chatId, pending);
+    await bot.sendMessage(chatId, "Теперь отправьте фотографии продукта.");
+    return;
+  }
+});
+
 bot.onText(/\/addProducts/, async (msg) => {
   isAddActive = true;
   await bot.sendMessage(msg.chat.id, "Пожалуйста, загрузите файл Excel.");
@@ -38,80 +69,43 @@ bot.onText(/\/addProducts/, async (msg) => {
 
 bot.onText(/\/createAdminLink/, async (msg) => Admins.Admins(bot, msg));
 
+// Modify the photo handler
 bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
-  // if (!isAddActive)
-  //   return await bot.sendMessage(
-  //     chatId,
-  //     "Please use the /add command to upload the product image."
-  //   );
-
-  const fileId = msg.photo?.[msg.photo.length - 1]?.file_id;
-  if (!fileId) {
+  if (!isAddActive || !pendingUploads.has(chatId)) {
     return await bot.sendMessage(
       chatId,
-      "❌ Error receiving the image. Please try again."
+      "Please use the /addProducts command first."
     );
   }
 
-  const filePath = await handleAddImage(fileId);
-
-  if (!filePath) {
+  const pending = pendingUploads.get(chatId)!;
+  if (!pending.text) {
     return await bot.sendMessage(
       chatId,
-      "❌ Error downloading the image. Please try again."
+      "Please send product description text first."
     );
   }
 
-  await bot.sendMessage(chatId, `✅ Image received successfully.`);
-  isAddActive = false;
+  const fileId = msg.photo?.[msg.photo.length - 1].file_id as string;
+  const fileLink = await bot.getFileLink(fileId as string);
+  const url = await ImageUploader.uploadImageFromTelegram(fileLink);
+
+  pending.images.push({ fileId, url });
+  pendingUploads.set(chatId, pending);
+
+  // Send confirmation button after receiving the image
+  await bot.sendMessage(chatId, "Image uploaded. Do you want to:", {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "Add more images", callback_data: "add_more_images" },
+          { text: "Confirm and save", callback_data: "confirm_upload" },
+        ],
+      ],
+    },
+  });
 });
-
-async function handleAddImage(fileId: string) {
-  try {
-    const file = await bot.getFile(fileId);
-    const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
-    const filePath = await path.join(
-      __dirname,
-      "uploads",
-      file.file_path?.split("/").pop()!
-    );
-
-    if (!fs.existsSync(path.dirname(filePath))) {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const fileStream = fs.createWriteStream(filePath);
-      https.get(fileUrl, (response) => {
-        response.pipe(fileStream);
-        fileStream.on("error", reject);
-        fileStream.on("finish", () => resolve());
-      });
-    });
-
-    const formData = new FormData();
-    formData.append("image", fs.createReadStream(filePath));
-
-    const response = await axios.post(
-      "http://localhost:5000/api/v1/images/upload",
-      formData,
-      {
-        headers: formData.getHeaders(),
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-      }
-    );
-
-    if (response.status !== 200) {
-      throw new Error("Failed to send image to server");
-    }
-
-    return filePath;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-}
 
 bot.on("document", (msg) => DocHandler(bot, msg, isAddActive));
 
@@ -167,3 +161,5 @@ Notification.LowStockAlert(bot).catch(console.error);
 
 //   bot.answerCallbackQuery(callbackQuery.id);
 // });
+
+export { pendingUploads };
