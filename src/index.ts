@@ -17,6 +17,9 @@ if (!token) {
 const bot = new TelegramBot(token, { polling: true });
 let isAddActive = false;
 
+const isAddActiveHandler = () =>
+  isAddActive ? (isAddActive = false) : (isAddActive = true);
+
 bot.onText(/\/start$/, async (msg) => Start(bot, msg));
 bot.onText(/\/start +(.+)/, async (msg, match) =>
   Start(bot, msg, match as RegExpExecArray)
@@ -99,8 +102,8 @@ bot.on("photo", async (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "Add more images", callback_data: "add_more_images" },
-          { text: "Confirm and save", callback_data: "confirm_upload" },
+          { text: "Add more images", callback_data: "addMoreImages" },
+          { text: "Confirm and save", callback_data: "confirmUpload" },
         ],
       ],
     },
@@ -162,4 +165,4 @@ Notification.LowStockAlert(bot).catch(console.error);
 //   bot.answerCallbackQuery(callbackQuery.id);
 // });
 
-export { pendingUploads };
+export { pendingUploads, isAddActiveHandler };

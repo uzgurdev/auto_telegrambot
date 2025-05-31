@@ -1,6 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { Orders } from "../commands";
-import { pendingUploads } from "../index";
+import { isAddActiveHandler, pendingUploads } from "../index";
 import { connect } from "../db";
 
 const QueryHandler = async (
@@ -72,6 +72,7 @@ const ConfirmUpload = async (
     // Clean up
     pendingUploads.delete(chatId);
     // isAddActive = false;
+    isAddActiveHandler();
   } catch (error) {
     console.error("Database error:", error);
     await bot.sendMessage(chatId, "Failed to save images.");
