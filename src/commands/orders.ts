@@ -28,6 +28,24 @@ const Orders = async (
 
   try {
     const db = await getDB();
+    const collections = await db.listCollections().toArray();
+    const orderCollectionExists = collections.some(
+      (col) => col.name === "orders"
+    );
+
+    if (!orderCollectionExists) {
+      await bot.sendMessage(chatId, "База данных заказов не инициализирована.");
+      return;
+    }
+
+    const ordersC = db.collection("orders");
+    const ordersCount = await ordersC.countDocuments();
+
+    if (ordersCount === 0) {
+      await bot.sendMessage(chatId, "База данных заказов пуста.");
+      return;
+    }
+
     const orders = db.collection("orders");
     const tenants = await Tenants(admins);
     const tenant = tenants[chatId];
@@ -56,6 +74,7 @@ const Orders = async (
     return bot.sendMessage(chatId, orderMessages, options || undefined);
   } catch (error) {
     console.error("Error in /orders command: ", error);
+    await bot.sendMessage(chatId, "Произошла ошибка при получении заказов.");
   } finally {
     await closeDB();
   }

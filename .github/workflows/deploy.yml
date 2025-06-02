@@ -1,0 +1,59 @@
+name: Deploy to Droplet
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧹 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🧱 Install dependencies and build
+        run: |
+          yarn install
+          yarn build
+
+      - name: 🧪 Debug - list files
+        run: |
+          echo "🗂️ Workspace root:"
+          ls -lah
+          echo "📁 dist:"
+          ls -lah dist || echo "dist folder missing"
+          echo "📄 Files to upload:"
+          find dist -type f 2>/dev/null || echo "No dist files found"
+
+      - name: 📦 Upload to Droplet
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          port: 22
+          source: "dist/,package.json,yarn.lock"
+          target: "/root/auto_backend"
+          overwrite: true
+          debug: true
+
+      - name: 🪵 What did we actually build?
+        run: |
+          find . -type f | grep -i -E 'dist|package|yarn'
+
+      - name: 🔁 Restart backend with PM2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          port: 22
+          script: |
+            cd /root/auto_backend
+            yarn install --production
+            pm2 restart backend || pm2 start dist/index.js --name backend
+
+      - name: ✅ Done
+        run: echo "🚀 Deployment complete!"

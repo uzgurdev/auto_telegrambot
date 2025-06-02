@@ -29,7 +29,7 @@ const Start = async (
   }
 
   // Check if the user is an admin
-  if (admins.some((adminId) => adminId === chatId.toString())) {
+  if (admins.some((adminId) => adminId === `${chatId}`)) {
     await bot.sendMessage(chatId, "Добро пожаловать в админ-панель!");
     return;
   }
@@ -38,6 +38,8 @@ const Start = async (
   if (param?.startsWith("admin_")) {
     const inviteCode = param.replace("admin_", "");
     const addedBy = pendingAdminInvites.get(inviteCode);
+
+    console.log({ addedBy, inviteCode, chatId, pendingAdminInvites });
 
     // Check if the invite code is valid
     if (!addedBy) {
@@ -102,7 +104,7 @@ const Start = async (
     if (typedOrders.length === 0) {
       await bot.sendMessage(
         chatId,
-        "Добро пожаловать в наш бот, у вас нет заказов на данный момент. Вы можете сделать заказ на example.com"
+        "Добро пожаловать в наш бот, у вас нет заказов на данный момент. Вы можете сделать заказ на donix.uz или donix.kz."
       );
       return;
     } else {

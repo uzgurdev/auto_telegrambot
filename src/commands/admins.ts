@@ -37,9 +37,10 @@ function getOrderedAdmins(): string[] {
 
 const Admins = async (bot: TelegramBot, msg: TelegramBot.Message) => {
   const chatId = msg.chat.id;
+  const superAdmins = config.bot.adminIds;
   const admins = getOrderedAdmins();
 
-  if (chatId.toString() !== admins[0] || chatId.toString() !== admins[1]) {
+  if (!superAdmins.some((adminId) => adminId === `${chatId}`)) {
     await bot.sendMessage(
       chatId,
       "У вас нет разрешения на использование этой команды."
@@ -49,7 +50,7 @@ const Admins = async (bot: TelegramBot, msg: TelegramBot.Message) => {
 
   if (
     admins.length >= 4 &&
-    (chatId.toString() === admins[0] || chatId.toString() === admins[1])
+    superAdmins.some((adminId) => adminId === `${chatId}`)
   ) {
     await bot.sendMessage(
       chatId,
