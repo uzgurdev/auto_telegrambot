@@ -35,7 +35,7 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: 22
           source: "dist/,package.json,yarn.lock"
-          target: "/root/auto_backend"
+          target: "/auto_telegrambot"
           overwrite: true
           debug: true
 
@@ -43,7 +43,7 @@ jobs:
         run: |
           find . -type f | grep -i -E 'dist|package|yarn'
 
-      - name: 🔁 Restart backend with PM2
+      - name: 🔁 Restart telegrambot with PM2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.DROPLET_IP }}
@@ -51,9 +51,9 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: 22
           script: |
-            cd /root/auto_backend
+            cd /auto_telegrambot
             yarn install --production
-            pm2 restart backend || pm2 start dist/index.js --name backend
+            pm2 restart telegrambot || pm2 start dist/index.js --name telegrambot
 
       - name: ✅ Done
         run: echo "🚀 Deployment complete!"
