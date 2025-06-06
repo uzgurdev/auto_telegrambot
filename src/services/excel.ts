@@ -16,6 +16,13 @@ async function processExcelFile(
 ): Promise<void> {
   const tenantId = tenants[chatId]._id;
 
+  // Send initial loading animation
+  const loadingMsg = await bot.sendAnimation(
+    chatId,
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+    { caption: "⏳ Обработка файла Excel..." }
+  );
+
   // Read Excel file
   const fileBuffer = fs.readFileSync(filePath);
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
@@ -36,18 +43,29 @@ async function processExcelFile(
         tenants[chatId].currency,
         bot,
         chatId,
-        rowIndex
+        rowIndex,
+        db
       );
 
       // Check for similar products
       const existingProduct = await Products.checkSimilarProduct(db, product);
 
       if (existingProduct !== null) {
+        // Delete loading animation before asking decision
+        await bot.deleteMessage(chatId, loadingMsg.message_id);
+
         const decision = await Products.askUserDecision(
           bot,
           product,
           existingProduct as Product & { _id: ObjectId },
           chatId
+        );
+
+        // Send loading animation again after decision
+        const newLoadingMsg = await bot.sendAnimation(
+          chatId,
+          "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+          { caption: "⏳ Продолжаем обработку..." }
         );
 
         if (decision === "same") {
@@ -61,6 +79,9 @@ async function processExcelFile(
           await db.collection("products").insertOne(product);
           insertedCount++;
         }
+
+        // Delete the new loading animation
+        await bot.deleteMessage(chatId, newLoadingMsg.message_id);
       } else {
         await db.collection("products").insertOne(product);
         await db
@@ -114,6 +135,8 @@ async function processExcelFile(
     }
   }
 
+  await bot.deleteMessage(chatId, loadingMsg.message_id);
+
   // Update message with results
   bot.editMessageText(
     insertedCount === 0
@@ -136,7 +159,8 @@ async function parseProductFromExcelRow(
   currency: string,
   bot: TelegramBot,
   chatId: number,
-  rowNumber: number
+  rowNumber: number,
+  db: Db
 ): Promise<Product> {
   const carModelsEnum = Object.values(CarModel);
   const carModels: string[] = [];
@@ -168,6 +192,7 @@ async function parseProductFromExcelRow(
 
   // Parse product name
   const nameParts = row["Наименование"]?.split(" ");
+  console.log({ nameParts, rowNumber });
   if (!nameParts) {
     // Send message to admin
     await bot.sendMessage(
@@ -182,8 +207,8 @@ async function parseProductFromExcelRow(
   }
 
   // Get other details
-  const producer = row["фирма"] || "";
-  const carPartIdsStr = String(row["номер"] || "");
+  const producer = row["Фирма"] || "";
+  const carPartIdsStr = String(row["Номер"] || "");
   const price = row["Стоимость"] || 0;
   const inStock = row["Itogo"] || 0;
 
@@ -194,17 +219,39 @@ async function parseProductFromExcelRow(
   // Default images
   let images: string[] = ["https://picsum.photos/200/300"];
 
-  // Attempt to fetch real images (can be moved to an async function)
+  // Fetch images from the images collection in the database
   try {
-    // This should be moved to an API service
-    const res = await axios.get(
-      `http://localhost:5000/api/v1/images/image/${carPartIdsStr.replace(
-        " ",
-        ","
-      )}`
-    );
-    if (res.data && Array.isArray(res.data)) {
-      images = res.data as string[];
+    const imagesDocs = await db
+      .collection("images")
+      .find({}) // fetch all, filter below
+      .toArray();
+
+    images = [];
+
+    for (const carPartId of carPartIds) {
+      for (const imgDoc of imagesDocs) {
+        const productID = imgDoc.productID;
+        if (productID === carPartId) {
+          images.push(imgDoc.url);
+        } else if (productID.includes("_")) {
+          const afterUnderscore = productID.split("_")[1];
+          if (afterUnderscore && isNaN(Number(afterUnderscore))) {
+            // after underscore is string, compare with productName
+            if (afterUnderscore.toLowerCase() === productName.toLowerCase()) {
+              images.push(imgDoc.url);
+            }
+          } else {
+            // after underscore is not string, compare with carPartId
+            if (carPartId === afterUnderscore) {
+              images.push(imgDoc.url);
+            }
+          }
+        }
+      }
+    }
+
+    if (images.length === 0) {
+      images = ["https://picsum.photos/200/300"];
     }
   } catch (error) {
     // Handle error

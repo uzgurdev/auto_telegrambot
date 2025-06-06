@@ -4,9 +4,19 @@ import dotenv from "dotenv";
 import { Admins, Help, Orders, Start } from "./commands";
 import { DocHandler, QueryHandler } from "./handlers";
 import { Notification, ImageUploader } from "./services";
+import { connect } from "./db";
 import config from "./config";
 
 dotenv.config();
+
+// Define interface for image document
+interface ImageDocument {
+  id: string;
+  productID: string;
+  url: string;
+  addedBy: number;
+  createdAt: Date;
+}
 
 const token = process.env.BOT_TOKEN;
 
@@ -37,6 +47,7 @@ interface PendingUpload {
     url: string;
   }>;
   text?: string;
+  confirmationMessageSent?: boolean; // New flag to track if confirmation was sent
 }
 
 // Add this state management
@@ -47,7 +58,7 @@ bot.onText(/\/addImage/, async (msg) => {
   const chatId = msg.chat.id;
   const admins = config.bot.adminIds;
   const isAdmin = admins.some((adminId) => adminId === `${chatId}`);
-  console.log({ isAdmin, admins, chatId });
+
   if (!isAdmin) {
     await bot.sendMessage(
       chatId,
@@ -56,7 +67,7 @@ bot.onText(/\/addImage/, async (msg) => {
     return;
   }
   isAddActive = true;
-  pendingUploads.set(chatId, { images: [] });
+  pendingUploads.set(chatId, { images: [], confirmationMessageSent: false });
   await bot.sendMessage(
     chatId,
     "Пожалуйста, отправьте текст описания продукта."
@@ -69,6 +80,40 @@ bot.on("text", async (msg) => {
 
   const pending = pendingUploads.get(chatId)!;
   if (!pending.text) {
+    // Check for existing images
+    try {
+      const db = await connect.getDB();
+      const existingImages = await db
+        .collection<ImageDocument>("images")
+        .find({ productID: msg.text })
+        .toArray();
+
+      if (existingImages.length > 0) {
+        // Show existing images to the user
+        const imageUrls = existingImages.map((img) => img.url);
+        const message =
+          "⚠️ Для этого продукта уже существуют изображения:\n\n" +
+          imageUrls
+            .map((url: string, i: number) => `${i + 1}. ${url}`)
+            .join("\n") +
+          "\n\nХотите добавить дополнительные изображения?";
+
+        await bot.sendMessage(chatId, message, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "Да, добавить еще", callback_data: "continue_upload" },
+                { text: "Нет, отменить", callback_data: "cancel_upload" },
+              ],
+            ],
+          },
+        });
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking existing images:", error);
+    }
+
     pending.text = msg.text;
     pendingUploads.set(chatId, pending);
     await bot.sendMessage(chatId, "Теперь отправьте фотографии продукта.");
@@ -106,29 +151,75 @@ bot.on("photo", async (msg) => {
   const url = await ImageUploader.uploadImageFromTelegram(fileLink);
 
   pending.images.push({ fileId, url });
-  pendingUploads.set(chatId, pending);
 
-  // Send confirmation button after receiving the image
-  await bot.sendMessage(chatId, "Изображение загружено. Вы хотите:", {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: "Добавить больше изображений",
-            callback_data: "addMoreImages",
-          },
-          { text: "Подтвердить и сохранить", callback_data: "confirmUpload" },
+  // Only send the confirmation message if it hasn't been sent before
+  if (!pending.confirmationMessageSent) {
+    await bot.sendMessage(chatId, "Изображение загружено. Вы хотите:", {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "Добавить больше изображений",
+              callback_data: "addMoreImages",
+            },
+            { text: "Подтвердить и сохранить", callback_data: "confirmUpload" },
+          ],
         ],
-      ],
-    },
-  });
+      },
+    });
+    pending.confirmationMessageSent = true;
+  }
+
+  pendingUploads.set(chatId, pending);
 });
 
 bot.on("document", (msg) => DocHandler(bot, msg, isAddActive));
 
-bot.on("callback_query", async (callbackQuery) =>
-  QueryHandler(bot, callbackQuery)
-);
+bot.on("callback_query", async (callbackQuery) => {
+  const chatId = callbackQuery.message?.chat.id;
+  if (!chatId) return;
+
+  const query = callbackQuery.data;
+
+  switch (query) {
+    case "continue_upload":
+      const pendingContinue = pendingUploads.get(chatId);
+      if (pendingContinue) {
+        pendingContinue.confirmationMessageSent = false;
+        pendingUploads.set(chatId, pendingContinue);
+      }
+      await bot.sendMessage(
+        chatId,
+        "Пожалуйста, отправьте дополнительные фотографии."
+      );
+      await bot.answerCallbackQuery(callbackQuery.id);
+      break;
+
+    case "cancel_upload":
+      pendingUploads.delete(chatId);
+      isAddActive = false;
+      await bot.sendMessage(chatId, "Загрузка изображений отменена.");
+      await bot.answerCallbackQuery(callbackQuery.id);
+      break;
+
+    case "addMoreImages":
+      const pendingAddMore = pendingUploads.get(chatId);
+      if (pendingAddMore) {
+        pendingAddMore.confirmationMessageSent = false;
+        pendingUploads.set(chatId, pendingAddMore);
+      }
+      await bot.sendMessage(
+        chatId,
+        "Пожалуйста, отправьте дополнительные фотографии."
+      );
+      await bot.answerCallbackQuery(callbackQuery.id);
+      break;
+
+    default:
+      await QueryHandler(bot, callbackQuery);
+      break;
+  }
+});
 
 Notification.NewOrderStream(bot).catch(console.error);
 Notification.LowStockAlert(bot).catch(console.error);

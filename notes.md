@@ -1,0 +1,2 @@
+- [ ] check if image's already uploaded
+- [ ] if multiple images uploaded, do not send multiple confirmations
