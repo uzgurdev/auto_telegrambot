@@ -179,7 +179,7 @@ const prepareOrdersData = async (
       text: `${i + 1}`,
       callback_data: `orders-page_${i}`,
     })),
-    [{ text: "Download Orders", callback_data: `orders-download` }],
+    [{ text: "Скачать заказы", callback_data: `orders-download` }],
   ];
 
   const options = {
@@ -264,7 +264,7 @@ const DownloadOrders = async (bot: TelegramBot, chatId: number) => {
       { header: "Наименование", key: "productName", width: 20 },
       { header: "Статус", key: "status", width: 15 },
       { header: "Сумма", key: "totalAmount", width: 15 },
-      { header: "Itogo", key: "inStock", width: 15 },
+      // { header: "Itogo", key: "inStock", width: 15 },
     ];
 
     // Set header row style
@@ -278,7 +278,7 @@ const DownloadOrders = async (bot: TelegramBot, chatId: number) => {
       "productName",
       "status",
       "totalAmount",
-      "inStock",
+      // "inStock",
     ];
 
     columnsToStyle.forEach((key) => {
@@ -385,7 +385,7 @@ const DownloadOrders = async (bot: TelegramBot, chatId: number) => {
                   : "",
               productName: item.name,
               status: order.status,
-              inStock: product.inStock || 0,
+              // inStock: product.inStock || 0,
             });
           });
         });

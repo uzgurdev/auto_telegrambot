@@ -1,2 +1,2 @@
-export { default as DocHandler } from "./document";
+export * as DocHandler from "./document";
 export { default as QueryHandler } from "./callbackQuery";

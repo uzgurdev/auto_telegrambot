@@ -2,6 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import { Orders } from "../commands";
 import { isAddActiveHandler, pendingUploads } from "../index";
 import { connect } from "../db";
+import { handleTenantSelection, pendingFileUploads } from "./document";
 
 const QueryHandler = async (
   bot: TelegramBot,
@@ -14,9 +15,20 @@ const QueryHandler = async (
   const chatId = message.chat.id;
   const messageId = message.message_id;
 
-  const [command, action, ...args] = data.split("_");
+  const [command, action, fileId] = data.split("_");
 
   switch (command) {
+    case "upload":
+      if (pendingFileUploads.has(chatId)) {
+        await handleTenantSelection(
+          bot,
+          chatId,
+          action as "kz" | "uz",
+          fileId,
+          messageId
+        );
+      }
+      break;
     case "orders-page":
       Orders.editOrdersMessage(bot, chatId, messageId, +action);
       break;
@@ -28,11 +40,14 @@ const QueryHandler = async (
       Orders.UpdateOrderStatus(bot, `${chatId}`, action, command);
       break;
     case "addMoreImages":
-      await bot.sendMessage(chatId, "Please send more images.");
+      await bot.sendMessage(
+        chatId,
+        "Пожалуйста, отправьте больше изображений."
+      );
       await bot.answerCallbackQuery(query.id);
       break;
     case "confirmUpload":
-      await ConfirmUpload(bot, chatId, messageId, args, query);
+      await ConfirmUpload(bot, chatId, messageId, [fileId], query);
       break;
   }
 
@@ -49,7 +64,7 @@ const ConfirmUpload = async (
 ) => {
   const pending = pendingUploads.get(chatId);
   if (!pending || !pending.text || pending.images.length === 0) {
-    await bot.sendMessage(chatId, "No pending uploads found.");
+    await bot.sendMessage(chatId, "Нет ожидающих загрузок.");
     await bot.answerCallbackQuery(query.id);
     return;
   }
@@ -68,14 +83,14 @@ const ConfirmUpload = async (
       });
     }
 
-    await bot.sendMessage(chatId, "All images saved successfully!");
+    await bot.sendMessage(chatId, "Все изображения успешно сохранены!");
     // Clean up
     pendingUploads.delete(chatId);
     // isAddActive = false;
     isAddActiveHandler();
   } catch (error) {
     console.error("Database error:", error);
-    await bot.sendMessage(chatId, "Failed to save images.");
+    await bot.sendMessage(chatId, "Не удалось сохранить изображения.");
   }
 
   await bot.answerCallbackQuery(query.id);

@@ -134,9 +134,9 @@ const displayUserOrders = async (
           : {
               inline_keyboard: [
                 [
-                  { text: "Cancel", callback_data: `cancelled_${order._id}` },
+                  { text: "Отмена", callback_data: `cancelled_${order._id}` },
                   {
-                    text: "Delivered",
+                    text: "Доставлен",
                     callback_data: `delivered_${order._id}`,
                   },
                 ],

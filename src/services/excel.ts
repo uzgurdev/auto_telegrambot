@@ -49,10 +49,14 @@ async function processExcelFile(
 
       // Check for similar products
       const existingProduct = await Products.checkSimilarProduct(db, product);
-
       if (existingProduct !== null) {
-        // Delete loading animation before asking decision
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
+        try {
+          // Delete loading animation before asking decision
+          await bot.deleteMessage(chatId, loadingMsg.message_id);
+        } catch (error) {
+          console.log("Error deleting loading message: ", error);
+          // Ignore error if message was already deleted
+        }
 
         const decision = await Products.askUserDecision(
           bot,
@@ -69,19 +73,25 @@ async function processExcelFile(
         );
 
         if (decision === "same") {
+          const { ...productWithoutInStock } = product;
           await db
             .collection("products")
             .updateOne(
               { _id: existingProduct._id },
-              { $inc: { inStock: product.inStock } }
+              { $set: productWithoutInStock }
             );
         } else if (decision === "new") {
           await db.collection("products").insertOne(product);
           insertedCount++;
         }
 
-        // Delete the new loading animation
-        await bot.deleteMessage(chatId, newLoadingMsg.message_id);
+        try {
+          // Delete the new loading animation
+          await bot.deleteMessage(chatId, newLoadingMsg.message_id);
+        } catch (error) {
+          console.log("Error deleting new loading message: ", error);
+          // Ignore error if message was already deleted
+        }
       } else {
         await db.collection("products").insertOne(product);
         await db
@@ -134,8 +144,12 @@ async function processExcelFile(
       continue;
     }
   }
-
-  await bot.deleteMessage(chatId, loadingMsg.message_id);
+  try {
+    await bot.deleteMessage(chatId, loadingMsg.message_id);
+  } catch (error) {
+    console.log("Error deleting final loading message: ", error);
+    // Ignore error if message was already deleted
+  }
 
   // Update message with results
   bot.editMessageText(
@@ -210,7 +224,7 @@ async function parseProductFromExcelRow(
   const producer = row["Фирма"] || "";
   const carPartIdsStr = String(row["Номер"] || "");
   const price = row["Стоимость"] || 0;
-  const inStock = row["Itogo"] || 0;
+  // const inStock = row["Itogo"] || 0;
 
   const carPartIds = isNaN(Number(carPartIdsStr))
     ? carPartIdsStr.split(" ")
@@ -265,8 +279,8 @@ async function parseProductFromExcelRow(
     carPartIds: carPartIds,
     price: price,
     currency: currency,
-    inStock: inStock,
-    lowStockAlert: 0,
+    // inStock: inStock,
+    // lowStockAlert: 0,
     tenantId: tenantId,
     images: images,
   };

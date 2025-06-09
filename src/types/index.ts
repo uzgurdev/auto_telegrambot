@@ -51,9 +51,9 @@ export interface Product {
   carPartIds: string[];
   price: number;
   currency: string;
-  inStock: number;
-  lowStockAlert: number;
   tenantId: ObjectId;
+  // inStock: number;
+  // lowStockAlert: number;
 }
 
 export interface Order {

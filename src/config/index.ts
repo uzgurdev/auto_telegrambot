@@ -1,7 +1,14 @@
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 
 dotenv.config();
+
+const uploadsPath = path.join(__dirname, "../../uploads");
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
 
 const config = {
   bot: {
@@ -16,7 +23,7 @@ const config = {
     pageSize: 3,
   },
   paths: {
-    uploads: path.join(__dirname, "../../uploads"),
+    uploads: uploadsPath,
     admins: path.join(__dirname, "../../data/admins.json"),
   },
 };

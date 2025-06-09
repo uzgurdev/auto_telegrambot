@@ -12,27 +12,68 @@ const downloadFile = async (
 ): Promise<string> => {
   const filePath = path.join(config.paths.uploads, filName);
 
-  if (!fs.existsSync(path.dirname(filePath))) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  }
-
   try {
+    // Ensure uploads directory exists
+    if (!fs.existsSync(path.dirname(filePath))) {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    }
+
     const fileStream = fs.createWriteStream(filePath);
     const response = await requests[method](fileUrl, data);
 
+    if (!response || !response.data) {
+      throw new Error("Invalid response from Telegram API");
+    }
+
     return new Promise((resolve, reject) => {
-      fileStream.on("finish", () => resolve(filePath));
-      fileStream.on("error", reject);
+      // Set timeouts to avoid hanging
+      const timeout = setTimeout(() => {
+        fileStream.destroy();
+        reject(new Error("File download timeout"));
+      }, 30000); // 30 seconds timeout
+
+      fileStream.on("finish", () => {
+        clearTimeout(timeout);
+        fileStream.close(() => resolve(filePath));
+      });
+
+      fileStream.on("error", (err: Error) => {
+        clearTimeout(timeout);
+        fileStream.destroy();
+        fs.unlink(filePath, () => reject(err)); // Clean up partial file
+      });
+
+      response.data.on("error", (err: Error) => {
+        clearTimeout(timeout);
+        fileStream.destroy();
+        fs.unlink(filePath, () => reject(err)); // Clean up partial file
+      });
+
       response.data.pipe(fileStream);
     });
   } catch (error) {
+    // Clean up any partial file that might have been created
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupError) {
+        console.error("Error cleaning up partial file:", cleanupError);
+      }
+    }
     console.error("Error downloading file:", error);
-    return "";
+    throw error; // Re-throw to be handled by caller
   }
 };
 
 const deleteFile = (filePath: string): void => {
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error("Error deleting file:", error);
+    throw error;
+  }
 };
 
 export { downloadFile, deleteFile };

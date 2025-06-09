@@ -152,8 +152,8 @@ bot.on("photo", async (msg) => {
 
   pending.images.push({ fileId, url });
 
-  // Only send the confirmation message if it hasn't been sent before
-  if (!pending.confirmationMessageSent) {
+  // Only send the confirmation message after collecting all images from the message
+  if (!pending.confirmationMessageSent && msg.media_group_id === undefined) {
     await bot.sendMessage(chatId, "Изображение загружено. Вы хотите:", {
       reply_markup: {
         inline_keyboard: [
@@ -168,12 +168,32 @@ bot.on("photo", async (msg) => {
       },
     });
     pending.confirmationMessageSent = true;
+  } else if (!pending.confirmationMessageSent && msg.media_group_id) {
+    // For media groups (multiple images), wait until we receive them all
+    setTimeout(async () => {
+      if (!pending.confirmationMessageSent) {
+        await bot.sendMessage(chatId, "Все изображения загружены. Вы хотите:", {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "Добавить больше изображений",
+                  callback_data: "addMoreImages",
+                },
+                { text: "Подтвердить и сохранить", callback_data: "confirmUpload" },
+              ],
+            ],
+          },
+        });
+        pending.confirmationMessageSent = true;
+      }
+    }, 1000); // Wait 1 second to ensure all media group items are processed
   }
 
   pendingUploads.set(chatId, pending);
 });
 
-bot.on("document", (msg) => DocHandler(bot, msg, isAddActive));
+bot.on("document", (msg) => DocHandler.DocHandler(bot, msg, isAddActive));
 
 bot.on("callback_query", async (callbackQuery) => {
   const chatId = callbackQuery.message?.chat.id;
@@ -222,6 +242,6 @@ bot.on("callback_query", async (callbackQuery) => {
 });
 
 Notification.NewOrderStream(bot).catch(console.error);
-Notification.LowStockAlert(bot).catch(console.error);
+// Notification.LowStockAlert(bot).catch(console.error);
 
 export { pendingUploads, isAddActiveHandler };

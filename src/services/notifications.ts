@@ -62,30 +62,30 @@ const AdminMessage = async (bot: TelegramBot, order: Order) => {
   }
 };
 
-const LowStockAlert = async (bot: TelegramBot) => {
-  const admins = Admins.getOrderedAdmins();
-  try {
-    const db = await connect.getDB();
-    const products = db.collection("products");
+// const LowStockAlert = async (bot: TelegramBot) => {
+//   const admins = Admins.getOrderedAdmins();
+//   try {
+//     const db = await connect.getDB();
+//     const products = db.collection("products");
 
-    const changeStream = products.watch();
-    changeStream.on("change", async (change) => {
-      if (change.operationType === "update") {
-        const updatedProduct = change.fullDocument;
-        console.dir({ updatedProduct }, { depth: null });
-        if (updatedProduct?.isStock <= updatedProduct?.lowStockAlert) {
-          for (const chatId of admins) {
-            await bot.sendMessage(
-              chatId,
-              `Товар ${updatedProduct?.name} заканчивается на складе. Осталось ${updatedProduct?.stock} штук.`
-            );
-          }
-        }
-      }
-    });
-  } catch (error) {
-    console.error("Error creating low stock alert:", error);
-  }
-};
+//     const changeStream = products.watch();
+//     changeStream.on("change", async (change) => {
+//       if (change.operationType === "update") {
+//         const updatedProduct = change.fullDocument;
+//         console.dir({ updatedProduct }, { depth: null });
+//         if (updatedProduct?.isStock <= updatedProduct?.lowStockAlert) {
+//           for (const chatId of admins) {
+//             await bot.sendMessage(
+//               chatId,
+//               `Товар ${updatedProduct?.name} заканчивается на складе. Осталось ${updatedProduct?.stock} штук.`
+//             );
+//           }
+//         }
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Error creating low stock alert:", error);
+//   }
+// };
 
-export { NewOrderStream, LowStockAlert };
+export { NewOrderStream };

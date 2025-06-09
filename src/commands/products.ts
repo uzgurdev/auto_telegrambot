@@ -64,14 +64,14 @@ export async function addProduct(db: Db, product: Product): Promise<ObjectId> {
   return result.insertedId;
 }
 
-export async function updateProductStock(
-  db: Db,
-  productId: ObjectId,
-  additionalStock: number
-): Promise<void> {
-  await db
-    .collection("products")
-    .updateOne({ _id: productId }, { $inc: { inStock: additionalStock } });
-}
+// export async function updateProductStock(
+//   db: Db,
+//   productId: ObjectId,
+//   additionalStock: number
+// ): Promise<void> {
+//   await db
+//     .collection("products")
+//     .updateOne({ _id: productId }, { $inc: { inStock: additionalStock } });
+// }
 
 export { checkSimilarProduct, askUserDecision };
