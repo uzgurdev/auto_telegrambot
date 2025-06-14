@@ -14,6 +14,13 @@ const readablePriceNumber = (
   );
 };
 
+// Function to escape special Markdown characters in user input
+const escapeMarkdown = (text: string): string => {
+  if (!text) return "";
+  // Escape special Markdown characters
+  return text.replace(/[*_`\[\]()~>#+=|{}.!-]/g, "\\$&");
+};
+
 function formatOrderMessage(order: Order): string {
   const isKZT = order.currency === "KZT";
 
@@ -25,9 +32,11 @@ function formatOrderMessage(order: Order): string {
         order.currency,
         isKZT ? "kz" : "en"
       );
-      return isKZT
-        ? `• *${item.name}*\n  💲Цена: *${readablePrice}*\n  📦Количество: *${item.quantity}*`
-        : `• *${item.name}*\n  💲Narhi: *${readablePrice}*\n  📦Soni: *${item.quantity}*`;
+      return `• *${escapeMarkdown(item.name)}* *${escapeMarkdown(
+        item.carPartIds?.join(", ") || ""
+      )}*\n  💲Цена: *${escapeMarkdown(readablePrice)}*\n  📦Количество: *${
+        item.quantity
+      }*`;
     })
     .join("\n\n");
 
@@ -45,7 +54,7 @@ function formatOrderMessage(order: Order): string {
     ? isKZT
       ? "🔔 *Новый Заказ* 🔔"
       : "🔔 *Yangi Buyurtma* 🔔"
-    : `🗓️ *${isKZT ? "Дата" : "Sana"}:* ${formattedDate}`;
+    : `🗓️ *${isKZT ? "Дата" : "Sana"}:* ${escapeMarkdown(formattedDate)}`;
 
   // Return a single, consistent string (Markdown)
   const readableTotalAmount = readablePriceNumber(
@@ -55,17 +64,21 @@ function formatOrderMessage(order: Order): string {
   );
 
   return `${header}
-👤 *${isKZT ? "Имя" : "Ismi"}:* ${order.name}
-📱 *${isKZT ? "Тел" : "Tel"}:* ${order.phone}
-📍 *${isKZT ? "Адрес" : "Manzil"}:* ${order.location}
-💬 *Telegram:* ${order.telegramUsername}
+👤 *${isKZT ? "Имя" : "Ismi"}:* ${escapeMarkdown(order.name)}
+📱 *${isKZT ? "Тел" : "Tel"}:* ${escapeMarkdown(order.phone)}
+📍 *${isKZT ? "Адрес" : "Manzil"}:* ${escapeMarkdown(order.location)}
+💬 *Telegram:* ${escapeMarkdown(order.telegramUsername)}
 
 🛒 *${isKZT ? "Запчасти" : "Ehtiyot qisimlar"}:*
         ${itemsText}
 
-💰 *${isKZT ? "Общая Сумма" : "Umumiy Summa"}:* ${readableTotalAmount}
-🚚 *${isKZT ? "Статус" : "Holati"}:* ${order.status}
-🆔 *${isKZT ? "ID Заказа" : "Buyurtma ID"}:* \`${order._id}\`
+💰 *${isKZT ? "Общая Сумма" : "Umumiy Summa"}:* ${escapeMarkdown(
+    readableTotalAmount
+  )}
+🚚 *${isKZT ? "Статус" : "Holati"}:* ${escapeMarkdown(order.status)}
+🆔 *${isKZT ? "ID Заказа" : "Buyurtma ID"}:* \`${escapeMarkdown(
+    order._id.toString()
+  )}\`
 `;
 }
 

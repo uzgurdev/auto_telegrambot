@@ -22,7 +22,7 @@ const Help = (
       keyboard: [
         [{ text: "/start" }],
         [{ text: "/orders" }],
-        [{ text: "/addProduct" }],
+        [{ text: "/addProducts" }],
         [{ text: "/addImage" }],
         [{ text: "/help" }],
       ],

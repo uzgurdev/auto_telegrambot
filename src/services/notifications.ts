@@ -24,7 +24,8 @@ const NewOrderStream = async (bot: TelegramBot) => {
 };
 
 const AdminMessage = async (bot: TelegramBot, order: Order) => {
-  const admins = Admins.getOrderedAdmins();
+  const devIds = process.env.DEV_IDS ? process.env.DEV_IDS.split(",") : [];
+  const admins = [...Admins.getOrderedAdmins(), ...devIds];
 
   try {
     const tenants = await Tenants(admins);

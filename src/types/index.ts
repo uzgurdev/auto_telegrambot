@@ -7,53 +7,118 @@ export enum OrderStatus {
   DELIVERED = "DELIVERED",
 }
 
-export enum CarModel {
-  ACCENT = "ACCENT",
-  AVEO = "AVEO",
+// Separate Car Brands from Car Models
+export enum CarBrand {
+  CHEVROLET = "CHEVROLET",
+  DAEWOO = "DAEWOO",
+  HYUNDAI = "HYUNDAI",
+  KIA = "KIA",
+  TOYOTA = "TOYOTA",
+  MERCEDES = "MERCEDES",
+  BMW = "BMW",
+  LADA = "LADA",
+  OPEL = "OPEL",
   BYD = "BYD",
-  COBALT = "COBALT",
   CHERRY = "CHERRY",
   CHANGAN = "CHANGAN",
-  DAMAS = "DAMAS",
-  EQUINOX = "EQUINOX",
-  ELANTRA = "ELANTRA",
-  GENTRA = "GENTRA",
-  HYUNDAI = "HYUNDAI",
-  HAVAL_JOLION = "HAVAL JOLION",
-  KIA = "KIA",
-  LACETTI = "LACETTI",
-  LADA = "LADA",
-  LANOS = "LANOS",
-  LEGANZA = "LEGANZA",
-  MATIZ = "MATIZ",
-  MALIBU = "MALIBU",
-  MONZA = "MONZA",
-  MERCEDES = "MERCEDES",
-  NEXIA = "NEXIA",
-  OPEL = "OPEL",
-  ONIX = "ONIX",
-  RIO = "RIO",
-  RAVON = "RAVON",
-  SOLARIS = "SOLARIS",
-  SPARK = "SPARK",
-  TRACKER = "TRACKER",
-  VECTRA = "VECTRA",
+  HAVAL = "HAVAL",
   JETOUR = "JETOUR",
   JAC = "JAC",
 }
+
+// Car Models mapped to their brands
+export enum CarModel {
+  // Chevrolet models
+  NEXIA = "NEXIA",
+  COBALT = "COBALT",
+  AVEO = "AVEO",
+  SPARK = "SPARK",
+  MALIBU = "MALIBU",
+  ONIX = "ONIX",
+  TRACKER = "TRACKER",
+  EQUINOX = "EQUINOX",
+
+  // Daewoo models
+  MATIZ = "MATIZ",
+  LACETTI = "LACETTI",
+  GENTRA = "GENTRA",
+  LANOS = "LANOS",
+  LEGANZA = "LEGANZA",
+  DAMAS = "DAMAS",
+
+  // Hyundai models
+  ACCENT = "ACCENT",
+  ELANTRA = "ELANTRA",
+  SOLARIS = "SOLARIS",
+
+  // Kia models
+  RIO = "RIO",
+
+  // Other models
+  MONZA = "MONZA",
+  RAVON = "RAVON",
+  VECTRA = "VECTRA",
+  HAVAL_JOLION = "HAVAL JOLION",
+}
+
+// Car Brand to Models mapping
+export const CAR_BRAND_TO_MODELS: { [key in CarBrand]: CarModel[] } = {
+  [CarBrand.CHEVROLET]: [
+    CarModel.NEXIA,
+    CarModel.COBALT,
+    CarModel.AVEO,
+    CarModel.SPARK,
+    CarModel.MALIBU,
+    CarModel.ONIX,
+    CarModel.TRACKER,
+    CarModel.EQUINOX,
+    CarModel.RAVON,
+    CarModel.MONZA,
+  ],
+  [CarBrand.DAEWOO]: [
+    CarModel.MATIZ,
+    CarModel.LACETTI,
+    CarModel.GENTRA,
+    CarModel.LANOS,
+    CarModel.LEGANZA,
+    CarModel.DAMAS,
+  ],
+  [CarBrand.HYUNDAI]: [CarModel.ACCENT, CarModel.ELANTRA, CarModel.SOLARIS],
+  [CarBrand.KIA]: [CarModel.RIO],
+  [CarBrand.TOYOTA]: [],
+  [CarBrand.MERCEDES]: [],
+  [CarBrand.BMW]: [],
+  [CarBrand.LADA]: [],
+  [CarBrand.OPEL]: [CarModel.VECTRA],
+  [CarBrand.BYD]: [],
+  [CarBrand.CHERRY]: [],
+  [CarBrand.CHANGAN]: [],
+  [CarBrand.HAVAL]: [CarModel.HAVAL_JOLION],
+  [CarBrand.JETOUR]: [],
+  [CarBrand.JAC]: [],
+};
+
+// Helper function to get car brand from model
+export const getCarBrandFromModel = (model: CarModel): CarBrand | null => {
+  for (const [brand, models] of Object.entries(CAR_BRAND_TO_MODELS)) {
+    if (models.includes(model)) {
+      return brand as CarBrand;
+    }
+  }
+  return null;
+};
 
 export interface Product {
   name: string;
   images: string[];
   position: string;
-  carModel: string[];
-  producer: string;
+  producer: string; // Producer brand (e.g., "GAMMA")
+  carBrand: string; // Car manufacturer (e.g., "CHEVROLET")
+  carModel: string[]; // Car models (e.g., ["NEXIA", "RAVON"])
   carPartIds: string[];
   price: number;
   currency: string;
   tenantId: ObjectId;
-  // inStock: number;
-  // lowStockAlert: number;
 }
 
 export interface Order {
@@ -76,6 +141,7 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  carPartIds: string[];
   _id: string;
 }
 

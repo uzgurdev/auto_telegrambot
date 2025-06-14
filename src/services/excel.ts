@@ -3,7 +3,14 @@ import fs from "fs";
 import TelegramBot from "node-telegram-bot-api";
 import { Db, ObjectId } from "mongodb";
 import axios from "axios";
-import { CarModel, Product, TenantMap } from "../types";
+import {
+  CarModel,
+  CarBrand,
+  Product,
+  TenantMap,
+  CAR_BRAND_TO_MODELS,
+  getCarBrandFromModel,
+} from "../types";
 import { Products } from "../commands";
 
 async function processExcelFile(
@@ -51,11 +58,9 @@ async function processExcelFile(
       const existingProduct = await Products.checkSimilarProduct(db, product);
       if (existingProduct !== null) {
         try {
-          // Delete loading animation before asking decision
           await bot.deleteMessage(chatId, loadingMsg.message_id);
         } catch (error) {
           console.log("Error deleting loading message: ", error);
-          // Ignore error if message was already deleted
         }
 
         const decision = await Products.askUserDecision(
@@ -65,7 +70,6 @@ async function processExcelFile(
           chatId
         );
 
-        // Send loading animation again after decision
         const newLoadingMsg = await bot.sendAnimation(
           chatId,
           "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
@@ -73,70 +77,22 @@ async function processExcelFile(
         );
 
         if (decision === "same") {
-          const { ...productWithoutInStock } = product;
           await db
             .collection("products")
-            .updateOne(
-              { _id: existingProduct._id },
-              { $set: productWithoutInStock }
-            );
+            .updateOne({ _id: existingProduct._id }, { $set: product });
         } else if (decision === "new") {
           await db.collection("products").insertOne(product);
           insertedCount++;
         }
 
         try {
-          // Delete the new loading animation
           await bot.deleteMessage(chatId, newLoadingMsg.message_id);
         } catch (error) {
           console.log("Error deleting new loading message: ", error);
-          // Ignore error if message was already deleted
         }
       } else {
         await db.collection("products").insertOne(product);
-        await db
-          .collection("auto_parts_categories")
-          .insertOne({ name: product.name }); // tags
-        const isCarBrandExist = await db
-          .collection("category")
-          .findOne({ name: product.producer });
-        const isCarModelExist = await db
-          .collection("category")
-          .findOne({ name: product.carModel });
-
-        if (!isCarBrandExist) {
-          const carBrand = {
-            name: product.producer,
-            type: "carBrand",
-            count: 1,
-          };
-          await db.collection("category").insertOne({ carBrand });
-        } else {
-          const carBrand = {
-            name: isCarBrandExist.name,
-            type: "carBrand",
-            count: isCarBrandExist.count + 1,
-          };
-
-          await db.collection("category").insertOne({ carBrand });
-        }
-
-        if (!isCarModelExist) {
-          const carBrand = {
-            name: product.carModel,
-            type: "carBrand",
-            count: 1,
-          };
-          await db.collection("category").insertOne({ carBrand });
-        } else {
-          const carBrand = {
-            name: isCarModelExist.name,
-            type: "carBrand",
-            count: isCarModelExist.count + 1,
-          };
-
-          await db.collection("category").insertOne({ carBrand });
-        }
+        await updateCategories(db, product);
         insertedCount++;
       }
     } catch (error) {
@@ -144,11 +100,11 @@ async function processExcelFile(
       continue;
     }
   }
+
   try {
     await bot.deleteMessage(chatId, loadingMsg.message_id);
   } catch (error) {
     console.log("Error deleting final loading message: ", error);
-    // Ignore error if message was already deleted
   }
 
   // Update message with results
@@ -177,7 +133,8 @@ async function parseProductFromExcelRow(
   db: Db
 ): Promise<Product> {
   const carModelsEnum = Object.values(CarModel);
-  const carModels: string[] = [];
+  const detectedCarModels: string[] = [];
+  let carBrand = "";
   let position = "";
 
   // Parse car models from name
@@ -189,8 +146,33 @@ async function parseProductFromExcelRow(
       "i"
     );
     if (regex.test(row["Наименование"])) {
-      carModels.push(model as string);
+      detectedCarModels.push(model as string);
+
+      // Determine car brand from the first detected model
+      if (!carBrand) {
+        const brandFromModel = getCarBrandFromModel(model as CarModel);
+        if (brandFromModel) {
+          carBrand = brandFromModel;
+        }
+      }
     }
+  }
+
+  // If no car brand detected from models, try to detect directly from producer
+  if (!carBrand && row["Фирма"]) {
+    const producer = row["Фирма"].toUpperCase();
+    // Check if producer contains car brand names
+    for (const brand of Object.values(CarBrand)) {
+      if (producer.includes(brand)) {
+        carBrand = brand;
+        break;
+      }
+    }
+  }
+
+  // Default car brand if not detected
+  if (!carBrand) {
+    carBrand = "UNIVERSAL"; // For universal parts
   }
 
   // Parse position information
@@ -206,15 +188,14 @@ async function parseProductFromExcelRow(
 
   // Parse product name
   const nameParts = row["Наименование"]?.split(" ");
-  console.log({ nameParts, rowNumber });
   if (!nameParts) {
-    // Send message to admin
     await bot.sendMessage(
       chatId,
       `❌ Строка ${rowNumber}: Отсутствует наименование детали. Пожалуйста, укажите название детали.`
     );
     throw new Error(`Missing product name in row ${rowNumber}`);
   }
+
   let productName = nameParts[0] || "";
   if (nameParts[1] && !positionRegex.test(nameParts[1])) {
     productName += ` ${nameParts[1]}`;
@@ -224,23 +205,37 @@ async function parseProductFromExcelRow(
   const producer = row["Фирма"] || "";
   const carPartIdsStr = String(row["Номер"] || "");
   const price = row["Стоимость"] || 0;
-  // const inStock = row["Itogo"] || 0;
 
   const carPartIds = isNaN(Number(carPartIdsStr))
     ? carPartIdsStr.split(" ")
     : [carPartIdsStr];
 
-  // Default images
-  let images: string[] = ["https://picsum.photos/200/300"];
+  // Get images
+  const images = await getProductImages(db, carPartIds, productName);
 
-  // Fetch images from the images collection in the database
+  return {
+    name: productName,
+    position: position,
+    producer: producer,
+    carBrand: carBrand,
+    carModel: detectedCarModels,
+    carPartIds: carPartIds,
+    price: price,
+    currency: currency,
+    tenantId: tenantId,
+    images: images,
+  };
+}
+
+async function getProductImages(
+  db: Db,
+  carPartIds: string[],
+  productName: string
+): Promise<string[]> {
+  let images: string[] = [];
+
   try {
-    const imagesDocs = await db
-      .collection("images")
-      .find({}) // fetch all, filter below
-      .toArray();
-
-    images = [];
+    const imagesDocs = await db.collection("images").find({}).toArray();
 
     for (const carPartId of carPartIds) {
       for (const imgDoc of imagesDocs) {
@@ -250,12 +245,10 @@ async function parseProductFromExcelRow(
         } else if (productID.includes("_")) {
           const afterUnderscore = productID.split("_")[1];
           if (afterUnderscore && isNaN(Number(afterUnderscore))) {
-            // after underscore is string, compare with productName
             if (afterUnderscore.toLowerCase() === productName.toLowerCase()) {
               images.push(imgDoc.url);
             }
           } else {
-            // after underscore is not string, compare with carPartId
             if (carPartId === afterUnderscore) {
               images.push(imgDoc.url);
             }
@@ -263,27 +256,83 @@ async function parseProductFromExcelRow(
         }
       }
     }
-
-    if (images.length === 0) {
-      images = ["https://picsum.photos/200/300"];
-    }
   } catch (error) {
-    // Handle error
+    console.error("Error fetching images:", error);
   }
 
-  return {
-    name: productName,
-    position: position,
-    carModel: carModels,
-    producer: producer,
-    carPartIds: carPartIds,
-    price: price,
-    currency: currency,
-    // inStock: inStock,
-    // lowStockAlert: 0,
-    tenantId: tenantId,
-    images: images,
-  };
+  if (images.length === 0) {
+    images = ["https://picsum.photos/200/300"];
+  }
+
+  return images;
+}
+
+// Update categories for hierarchy
+async function updateCategories(db: Db, product: Product): Promise<void> {
+  try {
+    // Add to auto_parts_categories (tags)
+    await db
+      .collection("auto_parts_categories")
+      .insertOne({ name: product.name });
+
+    // Update producer brand category
+    const existingProducer = await db.collection("category").findOne({
+      name: product.producer,
+      type: "producer",
+    });
+
+    if (!existingProducer) {
+      await db.collection("category").insertOne({
+        name: product.producer,
+        type: "producer",
+        count: 1,
+      });
+    } else {
+      await db
+        .collection("category")
+        .updateOne({ _id: existingProducer._id }, { $inc: { count: 1 } });
+    }
+
+    // Update car brand category
+    const existingCarBrand = await db.collection("category").findOne({
+      name: product.carBrand,
+      type: "carBrand",
+    });
+
+    if (!existingCarBrand) {
+      await db.collection("category").insertOne({
+        name: product.carBrand,
+        type: "carBrand",
+        count: 1,
+      });
+    } else {
+      await db
+        .collection("category")
+        .updateOne({ _id: existingCarBrand._id }, { $inc: { count: 1 } });
+    }
+
+    // Update car model categories
+    for (const model of product.carModel) {
+      const existingCarModel = await db.collection("category").findOne({
+        name: model,
+        type: "carModel",
+      });
+
+      if (!existingCarModel) {
+        await db.collection("category").insertOne({
+          name: model,
+          type: "carModel",
+          count: 1,
+        });
+      } else {
+        await db
+          .collection("category")
+          .updateOne({ _id: existingCarModel._id }, { $inc: { count: 1 } });
+      }
+    }
+  } catch (error) {
+    console.error("Error updating categories:", error);
+  }
 }
 
 export { processExcelFile, parseProductFromExcelRow };

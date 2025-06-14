@@ -1,12 +1,12 @@
 import TelegramBot from "node-telegram-bot-api";
 import { Db, ObjectId } from "mongodb";
-
 import { Product } from "../types";
 
 const checkSimilarProduct = async (db: Db, product: Product) => {
   return db.collection("products").findOne({
     name: product.name,
     carModel: product.carModel,
+    carBrand: product.carBrand, // Add car brand to comparison
     producer: product.producer,
     tenantId: product.tenantId,
     carPartIds: { $all: product.carPartIds },
@@ -20,7 +20,9 @@ const askUserDecision = async (
   chatId: number
 ): Promise<"new" | "same"> => {
   const formatProductInfo = (p: Product) =>
-    `${p.name} (${p.carModel}, ${p.carPartIds.join(",")})`;
+    `${p.name} (${p.producer} → ${p.carBrand} → ${p.carModel.join(
+      ", "
+    )}, ${p.carPartIds.join(",")})`;
 
   const messageText = [
     `⚠️ *Найден похожий товар!* ⚠️`,
@@ -63,15 +65,5 @@ export async function addProduct(db: Db, product: Product): Promise<ObjectId> {
   const result = await db.collection("products").insertOne(product);
   return result.insertedId;
 }
-
-// export async function updateProductStock(
-//   db: Db,
-//   productId: ObjectId,
-//   additionalStock: number
-// ): Promise<void> {
-//   await db
-//     .collection("products")
-//     .updateOne({ _id: productId }, { $inc: { inStock: additionalStock } });
-// }
 
 export { checkSimilarProduct, askUserDecision };

@@ -16,6 +16,8 @@ const Start = async (
   const admins = getOrderedAdmins();
   const telegramUsername = msg.from?.username;
 
+  console.log({ chatId, param, telegramUsername, admins });
+
   // Check if the user is an admin and has a telegram username
   if (
     !admins.some((adminId) => adminId === chatId.toString()) &&
