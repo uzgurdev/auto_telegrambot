@@ -99,7 +99,7 @@ const handleSingleOrder = async (
   }
 
   const orderMessages = formatOrderMessage({
-    isNew: false,
+    isNewOrder: false,
     ...userOrders[0],
   } as Order);
 
@@ -168,7 +168,7 @@ const prepareOrdersData = async (
   }
 
   const orderMessages = userOrders
-    .map((order: any) => formatOrderMessage({ isNew: false, ...order }))
+    .map((order: any) => formatOrderMessage({ isNewOrder: false, ...order }))
     .join("\n\n-----------\n\n");
 
   const totalOrders = await orders.countDocuments({ tenantId: tenant._id });

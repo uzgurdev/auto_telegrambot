@@ -100,7 +100,7 @@ const Start = async (
       totalAmount: order.totalAmount,
       tenantId: order.tenantId,
       currency: order.currency,
-      isNew: order.isNew,
+      isNewOrder: order.isNewOrder,
     }));
 
     if (typedOrders.length === 0) {

@@ -50,7 +50,7 @@ function formatOrderMessage(order: Order): string {
   );
 
   // Determine the header based on whether the order is new
-  const header = order.isNew
+  const header = order.isNewOrder
     ? isKZT
       ? "🔔 *Новый Заказ* 🔔"
       : "🔔 *Yangi Buyurtma* 🔔"

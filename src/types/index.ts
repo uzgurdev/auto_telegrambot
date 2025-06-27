@@ -132,7 +132,7 @@ export interface Order {
   items: OrderItem[];
   tenantId: ObjectId;
   currency: string;
-  isNew: boolean;
+  isNewOrder: boolean;
   createdAt: string;
 }
 
